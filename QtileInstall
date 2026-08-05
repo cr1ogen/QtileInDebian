@@ -118,6 +118,7 @@ PIP_PACKAGES=(
   dbus-fast
   iwlib
   pulsectl-asyncio
+  waypaper
 )
 
 python3 -m pip install --break-system-packages "${PIP_PACKAGES[@]}"
