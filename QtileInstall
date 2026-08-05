@@ -1,0 +1,184 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Colores para la salida en consola
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[0;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+echo -e "${BLUE}=== Iniciando instalación y migración de componentes del sistema ===${NC}\n"
+
+# 1. Verificar si el script se corre con sudo / root
+if [ "$EUID" -ne 0 ]; then
+  echo -e "${RED}[ERROR] Este script debe ejecutarse como root o con sudo.${NC}"
+  exit 1
+fi
+
+# Detectar el usuario real y su carpeta home
+ACTUAL_USER="${SUDO_USER:-$USER}"
+USER_HOME=$(eval echo "~${ACTUAL_USER}")
+
+# 2. Migrar repositorios a Debian Sid (Unstable)
+echo -e "${GREEN}[1/7] Cambiando repositorios APT a Debian Sid...${NC}"
+
+if [ -f /etc/apt/sources.list ]; then
+  echo -e "${GREEN}[+] Realizando backup de sources.list...${NC}"
+  cp /etc/apt/sources.list /etc/apt/sources.list.bak
+fi
+
+echo -e "${GREEN}[+] Reconfigurando /etc/apt/sources.list para Sid...${NC}"
+cat <<'EOF' > /etc/apt/sources.list
+deb http://deb.debian.org/debian/ sid main contrib non-free non-free-firmware
+# deb-src http://deb.debian.org/debian/ sid main contrib non-free non-free-firmware
+EOF
+
+# Si existen archivos en sources.list.d, comentamos las ramas viejas para evitar conflictos
+if [ -d /etc/apt/sources.list.d ]; then
+  find /etc/apt/sources.list.d/ -type f -name "*.list" -exec sed -i 's/\b\(bookworm\|trixie\|testing\|stable\)\b/sid/g' {} + || true
+fi
+
+# 3. Actualizar lista e índices de paquetes a Sid
+echo -e "${GREEN}[2/7] Actualizando repositorios y realizando dist-upgrade a Sid...${NC}"
+apt update -y
+apt dist-upgrade -y
+
+# 4. Instalación de paquetes de sistema principales (Ordenados alfabéticamente)
+echo -e "${GREEN}[3/7] Instalando paquetes de APT...${NC}"
+APT_PACKAGES=(
+  amd64-microcode
+  cmake
+  eza
+  gir1.2-gtk-3.0
+  git
+  gobject-introspection
+  gpm
+  grim
+  imagemagick
+  libgirepository-2.0-dev
+  libiw-dev
+  libmpv-dev
+  libpangocairo-1.0-0
+  libqt6webenginecore6
+  libwayland-bin
+  libwayland-dev
+  libwlroots-0.20
+  libwlroots-0.20-dev
+  meson
+  nwg-look
+  pipewire
+  pkg-config
+  pulseaudio-utils
+  python3-cairocffi
+  python3-cffi
+  python3-jinja2
+  python3-pip
+  python3-pyqt6
+  python3-pyqt6.qtqml
+  python3-pyqt6.qtwebengine
+  python3-setuptools
+  python3-xcffib
+  python3-yaml
+  rofi
+  slurp
+  socat
+  starship
+  wayland-protocols
+  wayland-utils
+  wlogout
+  wlr-randr
+  xdg-desktop-portal-gtk
+  xdg-desktop-portal-wlr
+  xdg-user-dirs
+  xdg-utils
+  xfce-polkit
+  xwayland
+  zsh
+)
+
+apt install -y "${APT_PACKAGES[@]}"
+
+# Instalación de SDDM sin recomendados
+echo -e "${GREEN}[+] Instalando SDDM (sin recomendados)...${NC}"
+apt install -y --no-install-recommends sddm
+
+# 5. Instalación de dependencias de Python via PIP
+echo -e "${GREEN}[4/7] Instalando dependencias de Python con PIP...${NC}"
+PIP_PACKAGES=(
+  dbus-fast
+  iwlib
+  pulsectl-asyncio
+)
+
+python3 -m pip install --break-system-packages "${PIP_PACKAGES[@]}"
+
+# Directorio base de trabajo
+GIT_DIR="${USER_HOME}/Git"
+sudo -u "$ACTUAL_USER" mkdir -p "$GIT_DIR"
+
+# 6. Clonar e instalar Qtile con soporte Wayland
+echo -e "${GREEN}[5/7] Clonando e instalando Qtile (backend Wayland)...${NC}"
+
+if [ -d "${GIT_DIR}/qtile/.git" ]; then
+  echo -e "${YELLOW}[!] El repositorio Qtile ya existe, actualizando con git pull...${NC}"
+  sudo -u "$ACTUAL_USER" git -C "${GIT_DIR}/qtile" pull
+else
+  sudo -u "$ACTUAL_USER" git clone https://github.com/qtile/qtile.git "${GIT_DIR}/qtile"
+fi
+
+cd "${GIT_DIR}/qtile"
+pip install --config-setting backend=wayland . --break-system-packages
+
+# 7. Clonar e instalar qtile-extras
+echo -e "${GREEN}[6/7] Clonando e instalando qtile-extras...${NC}"
+
+if [ -d "${GIT_DIR}/qtile-extras/.git" ]; then
+  echo -e "${YELLOW}[!] El repositorio qtile-extras ya existe, actualizando con git pull...${NC}"
+  sudo -u "$ACTUAL_USER" git -C "${GIT_DIR}/qtile-extras" pull
+else
+  sudo -u "$ACTUAL_USER" git clone https://github.com/elParaguayo/qtile-extras.git "${GIT_DIR}/qtile-extras"
+fi
+
+cd "${GIT_DIR}/qtile-extras"
+pip install . --break-system-packages
+
+# 8. Activación de servicios y configuración del entorno de usuario
+echo -e "${GREEN}[7/7] Configurando servicios, sesión de Wayland y usuario...${NC}"
+
+# Creación de la sesión de Wayland para Qtile en SDDM
+WAYLAND_SESSIONS_DIR="/usr/share/wayland-sessions"
+mkdir -p "$WAYLAND_SESSIONS_DIR"
+
+echo -e "${GREEN}[+] Creando archivo de sesión Qtile Wayland...${NC}"
+cat <<'EOF' > "${WAYLAND_SESSIONS_DIR}/qtile-wayland.desktop"
+[Desktop Entry]
+Name=Qtile (Wayland)
+Comment=Qtile Session on Wayland
+Exec=qtile start -b wayland
+Type=Application
+Keywords=wm;tiling;wayland;
+EOF
+
+# Creación de carpetas de usuario XDG (Downloads, Documents, Pictures, etc.)
+if [ "$ACTUAL_USER" != "root" ] && command -v xdg-user-dirs-update &> /dev/null; then
+  echo -e "${GREEN}[+] Generando directorios del usuario (${ACTUAL_USER})...${NC}"
+  sudo -u "$ACTUAL_USER" xdg-user-dirs-update
+fi
+
+# Habilitar SDDM para que arranque de forma predeterminada al reiniciar
+if command -v sddm &> /dev/null; then
+  echo -e "${GREEN}[+] Habilitando servicio SDDM...${NC}"
+  systemctl enable sddm.service
+  systemctl set-default graphical.target
+fi
+
+# Cambiar la shell predeterminada a Zsh para el usuario
+if [ "$ACTUAL_USER" != "root" ] && [ -x "$(command -v zsh)" ]; then
+  echo -e "${GREEN}[+] Cambiando shell por defecto a Zsh para ${ACTUAL_USER}...${NC}"
+  chsh -s "$(which zsh)" "$ACTUAL_USER" || true
+fi
+
+echo -e "\n${BLUE}=== ¡Instalación y migración a Debian Sid completadas con éxito! ===${NC}"
+echo -e "${YELLOW}Se recomienda reiniciar el sistema con 'sudo reboot'.${NC}"
