@@ -57,6 +57,7 @@ APT_PACKAGES=(
   gpm
   grim
   imagemagick
+  libcairo2-dev
   libgirepository-2.0-dev
   libiw-dev
   libmpv-dev
