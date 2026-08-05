@@ -46,7 +46,7 @@ Una vez dentro de la TTY de tu instalación limpia de Debian, ejecutá los sigui
 sudo apt update && sudo apt install -y git
 
 # 2. Clonar el repositorio
-git clone [https://github.com/TU_USUARIO/TU_REPOSITORIO.git](https://github.com/TU_USUARIO/TU_REPOSITORIO.git)
+git clone https://github.com/cr1ogen/QtileInDebian.git
 
 # 3. Entrar a la carpeta del proyecto
 cd TU_REPOSITORIO
