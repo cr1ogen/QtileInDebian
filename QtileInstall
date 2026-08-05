@@ -57,6 +57,7 @@ APT_PACKAGES=(
   gpm
   grim
   imagemagick
+  kitty
   libcairo2-dev
   libgirepository-2.0-dev
   libiw-dev
@@ -104,6 +105,12 @@ apt install -y "${APT_PACKAGES[@]}"
 # Instalación de SDDM sin recomendados
 echo -e "${GREEN}[+] Instalando SDDM (sin recomendados)...${NC}"
 apt install -y --no-install-recommends sddm
+
+# Instalación de Nautilus sin recomendados
+echo -e "${GREEN}[+] Instalando Nautilus (sin recomendados)...${NC}"
+apt install -y --no-install-recommends nautilus
+
+
 
 # 5. Instalación de dependencias de Python via PIP
 echo -e "${GREEN}[4/7] Instalando dependencias de Python con PIP...${NC}"
