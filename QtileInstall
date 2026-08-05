@@ -22,7 +22,7 @@ ACTUAL_USER="${SUDO_USER:-$USER}"
 USER_HOME=$(eval echo "~${ACTUAL_USER}")
 
 # 2. Migrar repositorios a Debian Sid (Unstable)
-echo -e "${GREEN}[1/7] Cambiando repositorios APT a Debian Sid...${NC}"
+echo -e "${GREEN}[1/8] Cambiando repositorios APT a Debian Sid...${NC}"
 
 if [ -f /etc/apt/sources.list ]; then
   echo -e "${GREEN}[+] Realizando backup de sources.list...${NC}"
@@ -41,12 +41,12 @@ if [ -d /etc/apt/sources.list.d ]; then
 fi
 
 # 3. Actualizar lista e índices de paquetes a Sid
-echo -e "${GREEN}[2/7] Actualizando repositorios y realizando dist-upgrade a Sid...${NC}"
+echo -e "${GREEN}[2/8] Actualizando repositorios y realizando dist-upgrade a Sid...${NC}"
 apt update -y
 apt dist-upgrade -y
 
 # 4. Instalación de paquetes de sistema principales (Ordenados alfabéticamente)
-echo -e "${GREEN}[3/7] Instalando paquetes de APT...${NC}"
+echo -e "${GREEN}[3/8] Instalando paquetes de APT...${NC}"
 APT_PACKAGES=(
   amd64-microcode
   cmake
@@ -69,6 +69,7 @@ APT_PACKAGES=(
   libwlroots-0.20
   libwlroots-0.20-dev
   meson
+  ninja-build
   nwg-look
   pipewire
   pkg-config
@@ -110,10 +111,8 @@ apt install -y --no-install-recommends sddm
 echo -e "${GREEN}[+] Instalando Nautilus (sin recomendados)...${NC}"
 apt install -y --no-install-recommends nautilus
 
-
-
 # 5. Instalación de dependencias de Python via PIP
-echo -e "${GREEN}[4/7] Instalando dependencias de Python con PIP...${NC}"
+echo -e "${GREEN}[4/8] Instalando dependencias de Python con PIP...${NC}"
 PIP_PACKAGES=(
   dbus-fast
   iwlib
@@ -128,7 +127,7 @@ GIT_DIR="${USER_HOME}/Git"
 sudo -u "$ACTUAL_USER" mkdir -p "$GIT_DIR"
 
 # 6. Clonar e instalar Qtile con soporte Wayland
-echo -e "${GREEN}[5/7] Clonando e instalando Qtile (backend Wayland)...${NC}"
+echo -e "${GREEN}[5/8] Clonando e instalar Qtile (backend Wayland)...${NC}"
 
 if [ -d "${GIT_DIR}/qtile/.git" ]; then
   echo -e "${YELLOW}[!] El repositorio Qtile ya existe, actualizando con git pull...${NC}"
@@ -141,7 +140,7 @@ cd "${GIT_DIR}/qtile"
 pip install --config-setting backend=wayland . --break-system-packages
 
 # 7. Clonar e instalar qtile-extras
-echo -e "${GREEN}[6/7] Clonando e instalando qtile-extras...${NC}"
+echo -e "${GREEN}[6/8] Clonando e instalando qtile-extras...${NC}"
 
 if [ -d "${GIT_DIR}/qtile-extras/.git" ]; then
   echo -e "${YELLOW}[!] El repositorio qtile-extras ya existe, actualizando con git pull...${NC}"
@@ -153,8 +152,23 @@ fi
 cd "${GIT_DIR}/qtile-extras"
 pip install . --break-system-packages
 
-# 8. Activación de servicios y configuración del entorno de usuario
-echo -e "${GREEN}[7/7] Configurando servicios, sesión de Wayland y usuario...${NC}"
+# 8. Clonar e instalar mpvpaper
+echo -e "${GREEN}[7/8] Clonando e instalando mpvpaper...${NC}"
+
+if [ -d "${GIT_DIR}/mpvpaper/.git" ]; then
+  echo -e "${YELLOW}[!] El repositorio mpvpaper ya existe, actualizando con git pull...${NC}"
+  sudo -u "$ACTUAL_USER" git -C "${GIT_DIR}/mpvpaper" pull
+else
+  sudo -u "$ACTUAL_USER" git clone --single-branch https://github.com/GhostNaN/mpvpaper "${GIT_DIR}/mpvpaper"
+fi
+
+cd "${GIT_DIR}/mpvpaper"
+sudo -u "$ACTUAL_USER" meson setup build --prefix=/usr/local --reconfigure || sudo -u "$ACTUAL_USER" meson setup build --prefix=/usr/local
+ninja -C build
+ninja -C build install
+
+# 9. Activación de servicios y configuración del entorno de usuario
+echo -e "${GREEN}[8/8] Configurando servicios, sesión de Wayland y usuario...${NC}"
 
 # Creación de la sesión de Wayland para Qtile en SDDM
 WAYLAND_SESSIONS_DIR="/usr/share/wayland-sessions"
