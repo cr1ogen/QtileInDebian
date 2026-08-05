@@ -46,7 +46,7 @@ Once booted into the TTY of your minimal Debian installation, run the following 
 sudo apt update && sudo apt install -y git
 
 # 2. Clone the repository
-git clone [https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git)
+git clone https://github.com/cr1ogen/QtileInDebian.git
 
 # 3. Navigate into the directory
 cd YOUR_REPOSITORY
