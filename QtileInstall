@@ -2,6 +2,17 @@
 
 set -euo pipefail
 
+# Comprobar que se ejecute estrictamente con sudo
+if [ "$EUID" -ne 0 ]; then
+  echo "[-] Este script debe ejecutarse con permisos de superusuario."
+  echo "    Por favor, corrrelo así: sudo $0"
+  exit 1
+fi
+
+# Determinar el usuario real que invocó sudo
+REAL_USER="${SUDO_USER:-$USER}"
+REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
+
 # Colores para la salida en consola
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -15,6 +26,7 @@ clear
 echo -e "${CYAN}====================================================================${NC}"
 echo -e "${BLUE}        INSTALADOR Y MIGRACIÓN DE SISTEMA DEBIAN SID / QTILE        ${NC}"
 echo -e "${CYAN}====================================================================${NC}"
+echo -e " Usuario objetivo: ${GREEN}${REAL_USER}${NC} (${REAL_HOME})"
 echo -e " Este script realizará las siguientes acciones en tu sistema:"
 echo -e "   1. Migración de repositorios APT a Debian Sid (Unstable)."
 echo -e "   2. Instalación de paquetes de sistema (APT, SDDM, Nautilus)."
@@ -42,42 +54,30 @@ case "$CHOICE" in
     ;;
 esac
 
-# Solicitud inicial de sudo si no es root
-if [ "$EUID" -ne 0 ]; then
-  echo -e "${YELLOW}[+] Solicitando permisos de administrador (sudo)...${NC}"
-  sudo -v
-  # Mantiene sudo activo en segundo plano durante la ejecución del script
-  while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
-fi
-
-ACTUAL_USER="$USER"
-USER_HOME="$HOME"
-
 # 2. Migrar repositorios a Debian Sid (Unstable)
 echo -e "${GREEN}[1/10] Cambiando repositorios APT a Debian Sid...${NC}"
 
 if [ -f /etc/apt/sources.list ]; then
   echo -e "${GREEN}[+] Realizando backup de sources.list...${NC}"
-  sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak
+  cp /etc/apt/sources.list /etc/apt/sources.list.bak
 fi
 
 echo -e "${GREEN}[+] Reconfigurando /etc/apt/sources.list para Sid...${NC}"
-sudo bash -c 'cat <<EOF > /etc/apt/sources.list
+cat <<EOF > /etc/apt/sources.list
 deb http://deb.debian.org/debian/ sid main contrib non-free non-free-firmware
 # deb-src http://deb.debian.org/debian/ sid main contrib non-free non-free-firmware
-EOF'
+EOF
 
-# Si existen archivos en sources.list.d, comentamos las ramas viejas para evitar conflictos
 if [ -d /etc/apt/sources.list.d ]; then
-  sudo find /etc/apt/sources.list.d/ -type f -name "*.list" -exec sed -i 's/\b\(bookworm\|trixie\|testing\|stable\)\b/sid/g' {} + || true
+  find /etc/apt/sources.list.d/ -type f -name "*.list" -exec sed -i 's/\b\(bookworm\|trixie\|testing\|stable\)\b/sid/g' {} + || true
 fi
 
 # 3. Actualizar lista e índices de paquetes a Sid
 echo -e "${GREEN}[2/10] Actualizando repositorios y realizando dist-upgrade a Sid...${NC}"
-sudo apt update -y
-sudo apt dist-upgrade -y
+apt update -y
+apt dist-upgrade -y
 
-# 4. Instalación de paquetes de sistema principales (Ordenados alfabéticamente)
+# 4. Instalación de paquetes de sistema principales
 echo -e "${GREEN}[3/10] Instalando paquetes de APT...${NC}"
 APT_PACKAGES=(
   amd64-microcode
@@ -136,15 +136,10 @@ APT_PACKAGES=(
   zsh
 )
 
-sudo apt install -y "${APT_PACKAGES[@]}"
+apt install -y "${APT_PACKAGES[@]}"
 
-# Instalación de SDDM sin recomendados
-echo -e "${GREEN}[+] Instalando SDDM (sin recomendados)...${NC}"
-sudo apt install -y --no-install-recommends sddm
-
-# Instalación de Nautilus sin recomendados
-echo -e "${GREEN}[+] Instalando Nautilus (sin recomendados)...${NC}"
-sudo apt install -y --no-install-recommends nautilus
+echo -e "${GREEN}[+] Instalando SDDM y Nautilus (sin recomendados)...${NC}"
+apt install -y --no-install-recommends sddm nautilus
 
 # 5. Instalación de dependencias de Python via PIP
 echo -e "${GREEN}[4/10] Instalando dependencias de Python con PIP...${NC}"
@@ -155,67 +150,69 @@ PIP_PACKAGES=(
   waypaper
 )
 
-sudo python3 -m pip install --break-system-packages "${PIP_PACKAGES[@]}"
+python3 -m pip install --break-system-packages "${PIP_PACKAGES[@]}"
 
-# Directorio base de trabajo
-GIT_DIR="${USER_HOME}/Git"
-mkdir -p "$GIT_DIR"
+# Directorio base de trabajo dentro del HOME del usuario
+GIT_DIR="${REAL_HOME}/Git"
+sudo -u "$REAL_USER" mkdir -p "$GIT_DIR"
 
 # 6. Clonar e instalar Qtile con soporte Wayland
-echo -e "${GREEN}[5/10] Clonando e instalando Qtile (backend Wayland)...${NC}"
+echo -e "${GREEN}[5/10] Clonando e instalar Qtile (backend Wayland)...${NC}"
 
 if [ -d "${GIT_DIR}/qtile/.git" ]; then
-  echo -e "${YELLOW}[!] El repositorio Qtile ya existe, actualizando con git pull...${NC}"
-  git -C "${GIT_DIR}/qtile" pull
+  echo -e "${YELLOW}[!] El repositorio Qtile ya existe, actualizando...${NC}"
+  sudo -u "$REAL_USER" git -C "${GIT_DIR}/qtile" pull
 else
-  git clone https://github.com/qtile/qtile.git "${GIT_DIR}/qtile"
+  sudo -u "$REAL_USER" git clone https://github.com/qtile/qtile.git "${GIT_DIR}/qtile"
 fi
 
 cd "${GIT_DIR}/qtile"
-sudo pip install --config-setting backend=wayland . --break-system-packages
+pip install --config-setting backend=wayland . --break-system-packages
 
 # 7. Clonar e instalar qtile-extras
-echo -e "${GREEN}[6/10] Clonando e instalando qtile-extras...${NC}"
+echo -e "${GREEN}[6/10] Clonando e instalar qtile-extras...${NC}"
 
 if [ -d "${GIT_DIR}/qtile-extras/.git" ]; then
-  echo -e "${YELLOW}[!] El repositorio qtile-extras ya existe, actualizando con git pull...${NC}"
-  git -C "${GIT_DIR}/qtile-extras" pull
+  echo -e "${YELLOW}[!] El repositorio qtile-extras ya existe, actualizando...${NC}"
+  sudo -u "$REAL_USER" git -C "${GIT_DIR}/qtile-extras" pull
 else
-  git clone https://github.com/elParaguayo/qtile-extras.git "${GIT_DIR}/qtile-extras"
+  sudo -u "$REAL_USER" git clone https://github.com/elParaguayo/qtile-extras.git "${GIT_DIR}/qtile-extras"
 fi
 
 cd "${GIT_DIR}/qtile-extras"
-sudo pip install . --break-system-packages
+pip install . --break-system-packages
 
 # 8. Clonar e instalar mpvpaper
-echo -e "${GREEN}[7/10] Clonando e instalando mpvpaper...${NC}"
+echo -e "${GREEN}[7/10] Clonando e instalar mpvpaper...${NC}"
 
 if [ -d "${GIT_DIR}/mpvpaper/.git" ]; then
-  echo -e "${YELLOW}[!] El repositorio mpvpaper ya existe, actualizando con git pull...${NC}"
-  git -C "${GIT_DIR}/mpvpaper" pull
+  echo -e "${YELLOW}[!] El repositorio mpvpaper ya existe, actualizando...${NC}"
+  sudo -u "$REAL_USER" git -C "${GIT_DIR}/mpvpaper" pull
 else
-  git clone --single-branch https://github.com/GhostNaN/mpvpaper "${GIT_DIR}/mpvpaper"
+  sudo -u "$REAL_USER" git clone --single-branch https://github.com/GhostNaN/mpvpaper "${GIT_DIR}/mpvpaper"
 fi
 
 cd "${GIT_DIR}/mpvpaper"
 meson setup build --prefix=/usr/local --reconfigure || meson setup build --prefix=/usr/local
 ninja -C build
-sudo ninja -C build install
+ninja -C build install
 
-# 9. Instalación de Matugen con Cargo (usuario normal)
-echo -e "${GREEN}[8/10] Instalando matugen via Cargo...${NC}"
-cargo install matugen
+# 9. Instalación de Matugen con Cargo (se compila como usuario normal)
+echo -e "${GREEN}[8/10] Instalando matugen via Cargo para ${REAL_USER}...${NC}"
+sudo -u "$REAL_USER" cargo install matugen || true
 
 # 10. Instalación de Fuentes (JetBrains Mono Nerd Font)
 echo -e "${GREEN}[9/10] Instalando JetBrainsMono Nerd Font...${NC}"
-FONT_DIR="${USER_HOME}/.local/share/fonts"
-mkdir -p "$FONT_DIR"
+FONT_DIR="${REAL_HOME}/.local/share/fonts"
+sudo -u "$REAL_USER" mkdir -p "$FONT_DIR"
+
 if [ ! -f "${FONT_DIR}/JetBrainsMonoNerdFont-Regular.ttf" ]; then
   echo -e "${GREEN}[+] Descargando archivo de fuentes...${NC}"
-  curl -fLo "${FONT_DIR}/JetBrainsMono.zip" https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip
-  unzip -o "${FONT_DIR}/JetBrainsMono.zip" -d "$FONT_DIR"
-  rm "${FONT_DIR}/JetBrainsMono.zip"
-  fc-cache -fv
+  curl -fLo "/tmp/JetBrainsMono.zip" https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip
+  unzip -o "/tmp/JetBrainsMono.zip" -d "$FONT_DIR"
+  rm "/tmp/JetBrainsMono.zip"
+  chown -R "${REAL_USER}:${REAL_USER}" "$FONT_DIR"
+  sudo -u "$REAL_USER" fc-cache -fv
 else
   echo -e "${YELLOW}[!] La fuente JetBrainsMono Nerd Font ya está instalada.${NC}"
 fi
@@ -223,38 +220,36 @@ fi
 # 11. Activación de servicios y configuración del entorno de usuario
 echo -e "${GREEN}[10/10] Configurando servicios, sesión de Wayland y usuario...${NC}"
 
-# Creación de la sesión de Wayland para Qtile en SDDM
 WAYLAND_SESSIONS_DIR="/usr/share/wayland-sessions"
-sudo mkdir -p "$WAYLAND_SESSIONS_DIR"
+mkdir -p "$WAYLAND_SESSIONS_DIR"
 
 echo -e "${GREEN}[+] Creando archivo de sesión Qtile Wayland...${NC}"
-sudo bash -c "cat <<EOF > ${WAYLAND_SESSIONS_DIR}/qtile-wayland.desktop
+cat <<EOF > ${WAYLAND_SESSIONS_DIR}/qtile-wayland.desktop
 [Desktop Entry]
 Name=Qtile (Wayland)
 Comment=Qtile Session on Wayland
 Exec=qtile start -b wayland
 Type=Application
 Keywords=wm;tiling;wayland;
-EOF"
+EOF
 
-# Creación de carpetas de usuario XDG (Downloads, Documents, Pictures, etc.)
+chmod 644 ${WAYLAND_SESSIONS_DIR}/qtile-wayland.desktop
+
 if command -v xdg-user-dirs-update &> /dev/null; then
-  echo -e "${GREEN}[+] Generando directorios del usuario (${ACTUAL_USER})...${NC}"
-  xdg-user-dirs-update
+  echo -e "${GREEN}[+] Generando directorios del usuario (${REAL_USER})...${NC}"
+  sudo -u "$REAL_USER" xdg-user-dirs-update || true
 fi
 
-# Habilitar SDDM para que arranque de forma predeterminada al reiniciar
 if command -v sddm &> /dev/null; then
   echo -e "${GREEN}[+] Habilitando servicio SDDM...${NC}"
-  sudo systemctl enable sddm.service
-  sudo systemctl set-default graphical.target
+  systemctl enable sddm.service
+  systemctl set-default graphical.target
 fi
 
-# Cambiar la shell predeterminada a Zsh para el usuario
 if [ -x "$(command -v zsh)" ]; then
-  echo -e "${GREEN}[+] Cambiando shell por defecto a Zsh para ${ACTUAL_USER}...${NC}"
-  chsh -s "$(which zsh)" "$ACTUAL_USER" || true
+  echo -e "${GREEN}[+] Cambiando shell por defecto a Zsh para ${REAL_USER}...${NC}"
+  chsh -s "$(which zsh)" "$REAL_USER" || true
 fi
 
-echo -e "\n${BLUE}=== ¡Instalación y migración a Debian Sid completadas con éxito! ===${NC}"
-echo -e "${YELLOW}Se recomienda reiniciar el sistema con 'sudo reboot'.${NC}"
+echo -e "\n${BLUE}=== ¡Instalación completada con éxito! ===${NC}"
+echo -e "${YELLOW}Ejecutá 'reboot' para reiniciar el sistema y entrar a SDDM.${NC}"
