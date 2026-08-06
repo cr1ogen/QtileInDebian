@@ -22,7 +22,8 @@ echo -e "   3. Instalación de paquetes Python globales (Waypaper, etc.)."
 echo -e "   4. Compilación e instalación de Qtile (Wayland) y qtile-extras."
 echo -e "   5. Compilación e instalación de mpvpaper."
 echo -e "   6. Instalación de Matugen mediante Cargo."
-echo -e "   7. Configuración de sesión Wayland, SDDM y cambio de shell a Zsh."
+echo -e "   7. Descarga e instalación de JetBrainsMono Nerd Font."
+echo -e "   8. Configuración de sesión Wayland, SDDM y cambio de shell a Zsh."
 echo -e "${CYAN}====================================================================${NC}\n"
 
 echo -e "¿Qué deseas hacer?"
@@ -41,11 +42,11 @@ case "$CHOICE" in
     ;;
 esac
 
-# Request sudo credentials up front if not already root
+# Solicitud inicial de sudo si no es root
 if [ "$EUID" -ne 0 ]; then
   echo -e "${YELLOW}[+] Solicitando permisos de administrador (sudo)...${NC}"
   sudo -v
-  # Keep sudo timestamp valid in the background during script execution
+  # Mantiene sudo activo en segundo plano durante la ejecución del script
   while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 fi
 
@@ -53,7 +54,7 @@ ACTUAL_USER="$USER"
 USER_HOME="$HOME"
 
 # 2. Migrar repositorios a Debian Sid (Unstable)
-echo -e "${GREEN}[1/9] Cambiando repositorios APT a Debian Sid...${NC}"
+echo -e "${GREEN}[1/10] Cambiando repositorios APT a Debian Sid...${NC}"
 
 if [ -f /etc/apt/sources.list ]; then
   echo -e "${GREEN}[+] Realizando backup de sources.list...${NC}"
@@ -72,16 +73,17 @@ if [ -d /etc/apt/sources.list.d ]; then
 fi
 
 # 3. Actualizar lista e índices de paquetes a Sid
-echo -e "${GREEN}[2/9] Actualizando repositorios y realizando dist-upgrade a Sid...${NC}"
+echo -e "${GREEN}[2/10] Actualizando repositorios y realizando dist-upgrade a Sid...${NC}"
 sudo apt update -y
 sudo apt dist-upgrade -y
 
 # 4. Instalación de paquetes de sistema principales (Ordenados alfabéticamente)
-echo -e "${GREEN}[3/9] Instalando paquetes de APT...${NC}"
+echo -e "${GREEN}[3/10] Instalando paquetes de APT...${NC}"
 APT_PACKAGES=(
   amd64-microcode
   cargo
   cmake
+  curl
   eza
   gir1.2-gtk-3.0
   git
@@ -120,6 +122,7 @@ APT_PACKAGES=(
   slurp
   socat
   starship
+  unzip
   wayland-protocols
   wayland-utils
   wlogout
@@ -144,7 +147,7 @@ echo -e "${GREEN}[+] Instalando Nautilus (sin recomendados)...${NC}"
 sudo apt install -y --no-install-recommends nautilus
 
 # 5. Instalación de dependencias de Python via PIP
-echo -e "${GREEN}[4/9] Instalando dependencias de Python con PIP...${NC}"
+echo -e "${GREEN}[4/10] Instalando dependencias de Python con PIP...${NC}"
 PIP_PACKAGES=(
   dbus-fast
   iwlib
@@ -159,7 +162,7 @@ GIT_DIR="${USER_HOME}/Git"
 mkdir -p "$GIT_DIR"
 
 # 6. Clonar e instalar Qtile con soporte Wayland
-echo -e "${GREEN}[5/9] Clonando e instalando Qtile (backend Wayland)...${NC}"
+echo -e "${GREEN}[5/10] Clonando e instalando Qtile (backend Wayland)...${NC}"
 
 if [ -d "${GIT_DIR}/qtile/.git" ]; then
   echo -e "${YELLOW}[!] El repositorio Qtile ya existe, actualizando con git pull...${NC}"
@@ -172,7 +175,7 @@ cd "${GIT_DIR}/qtile"
 sudo pip install --config-setting backend=wayland . --break-system-packages
 
 # 7. Clonar e instalar qtile-extras
-echo -e "${GREEN}[6/9] Clonando e instalando qtile-extras...${NC}"
+echo -e "${GREEN}[6/10] Clonando e instalando qtile-extras...${NC}"
 
 if [ -d "${GIT_DIR}/qtile-extras/.git" ]; then
   echo -e "${YELLOW}[!] El repositorio qtile-extras ya existe, actualizando con git pull...${NC}"
@@ -185,7 +188,7 @@ cd "${GIT_DIR}/qtile-extras"
 sudo pip install . --break-system-packages
 
 # 8. Clonar e instalar mpvpaper
-echo -e "${GREEN}[7/9] Clonando e instalando mpvpaper...${NC}"
+echo -e "${GREEN}[7/10] Clonando e instalando mpvpaper...${NC}"
 
 if [ -d "${GIT_DIR}/mpvpaper/.git" ]; then
   echo -e "${YELLOW}[!] El repositorio mpvpaper ya existe, actualizando con git pull...${NC}"
@@ -200,11 +203,25 @@ ninja -C build
 sudo ninja -C build install
 
 # 9. Instalación de Matugen con Cargo (usuario normal)
-echo -e "${GREEN}[8/9] Instalando matugen via Cargo...${NC}"
+echo -e "${GREEN}[8/10] Instalando matugen via Cargo...${NC}"
 cargo install matugen
 
-# 10. Activación de servicios y configuración del entorno de usuario
-echo -e "${GREEN}[9/9] Configurando servicios, sesión de Wayland y usuario...${NC}"
+# 10. Instalación de Fuentes (JetBrains Mono Nerd Font)
+echo -e "${GREEN}[9/10] Instalando JetBrainsMono Nerd Font...${NC}"
+FONT_DIR="${USER_HOME}/.local/share/fonts"
+mkdir -p "$FONT_DIR"
+if [ ! -f "${FONT_DIR}/JetBrainsMonoNerdFont-Regular.ttf" ]; then
+  echo -e "${GREEN}[+] Descargando archivo de fuentes...${NC}"
+  curl -fLo "${FONT_DIR}/JetBrainsMono.zip" https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip
+  unzip -o "${FONT_DIR}/JetBrainsMono.zip" -d "$FONT_DIR"
+  rm "${FONT_DIR}/JetBrainsMono.zip"
+  fc-cache -fv
+else
+  echo -e "${YELLOW}[!] La fuente JetBrainsMono Nerd Font ya está instalada.${NC}"
+fi
+
+# 11. Activación de servicios y configuración del entorno de usuario
+echo -e "${GREEN}[10/10] Configurando servicios, sesión de Wayland y usuario...${NC}"
 
 # Creación de la sesión de Wayland para Qtile en SDDM
 WAYLAND_SESSIONS_DIR="/usr/share/wayland-sessions"
@@ -240,3 +257,4 @@ if [ -x "$(command -v zsh)" ]; then
 fi
 
 echo -e "\n${BLUE}=== ¡Instalación y migración a Debian Sid completadas con éxito! ===${NC}"
+echo -e "${YELLOW}Se recomienda reiniciar el sistema con 'sudo reboot'.${NC}"
