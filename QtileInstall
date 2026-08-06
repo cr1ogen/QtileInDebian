@@ -7,11 +7,41 @@ GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 YELLOW='\033[0;33m'
 RED='\033[0;31m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}=== Iniciando instalación y migración de componentes del sistema ===${NC}\n"
+# 1. Menú de bienvenida y confirmación
+clear
+echo -e "${CYAN}====================================================================${NC}"
+echo -e "${BLUE}        INSTALADOR Y MIGRACIÓN DE SISTEMA DEBIAN SID / QTILE        ${NC}"
+echo -e "${CYAN}====================================================================${NC}"
+echo -e " Este script realizará las siguientes acciones en tu sistema:"
+echo -e "   1. Migración de repositorios APT a Debian Sid (Unstable)."
+echo -e "   2. Instalación de paquetes de sistema (APT, SDDM, Nautilus)."
+echo -e "   3. Instalación de paquetes Python globales (Waypaper, etc.)."
+echo -e "   4. Compilación e instalación de Qtile (Wayland) y qtile-extras."
+echo -e "   5. Compilación e instalación de mpvpaper."
+echo -e "   6. Instalación de Matugen mediante Cargo."
+echo -e "   7. Configuración de sesión Wayland, SDDM y cambio de shell a Zsh."
+echo -e "${CYAN}====================================================================${NC}\n"
 
-# 1. Verificar si el script se corre con sudo / root
+echo -e "¿Qué deseas hacer?"
+echo -e "  ${GREEN}[1]${NC} Iniciar la instalación ahora"
+echo -e "  ${RED}[2]${NC} Cancelar y salir"
+echo ""
+read -p "Selecciona una opción [1/2] (por defecto 1): " CHOICE
+
+case "$CHOICE" in
+  2|[nN]|[nN][oO])
+    echo -e "\n${YELLOW}[!] Instalación cancelada por el usuario. Saliendo...${NC}"
+    exit 0
+    ;;
+  *)
+    echo -e "\n${GREEN}[+] Iniciando el proceso de instalación...${NC}\n"
+    ;;
+esac
+
+# 2. Verificar si el script se corre con sudo / root
 if [ "$EUID" -ne 0 ]; then
   echo -e "${RED}[ERROR] Este script debe ejecutarse como root o con sudo.${NC}"
   exit 1
@@ -21,7 +51,7 @@ fi
 ACTUAL_USER="${SUDO_USER:-$USER}"
 USER_HOME=$(eval echo "~${ACTUAL_USER}")
 
-# 2. Migrar repositorios a Debian Sid (Unstable)
+# 3. Migrar repositorios a Debian Sid (Unstable)
 echo -e "${GREEN}[1/9] Cambiando repositorios APT a Debian Sid...${NC}"
 
 if [ -f /etc/apt/sources.list ]; then
@@ -40,12 +70,12 @@ if [ -d /etc/apt/sources.list.d ]; then
   find /etc/apt/sources.list.d/ -type f -name "*.list" -exec sed -i 's/\b\(bookworm\|trixie\|testing\|stable\)\b/sid/g' {} + || true
 fi
 
-# 3. Actualizar lista e índices de paquetes a Sid
+# 4. Actualizar lista e índices de paquetes a Sid
 echo -e "${GREEN}[2/9] Actualizando repositorios y realizando dist-upgrade a Sid...${NC}"
 apt update -y
 apt dist-upgrade -y
 
-# 4. Instalación de paquetes de sistema principales (Ordenados alfabéticamente)
+# 5. Instalación de paquetes de sistema principales (Ordenados alfabéticamente)
 echo -e "${GREEN}[3/9] Instalando paquetes de APT...${NC}"
 APT_PACKAGES=(
   amd64-microcode
@@ -112,7 +142,7 @@ apt install -y --no-install-recommends sddm
 echo -e "${GREEN}[+] Instalando Nautilus (sin recomendados)...${NC}"
 apt install -y --no-install-recommends nautilus
 
-# 5. Instalación de dependencias de Python via PIP
+# 6. Instalación de dependencias de Python via PIP
 echo -e "${GREEN}[4/9] Instalando dependencias de Python con PIP...${NC}"
 PIP_PACKAGES=(
   dbus-fast
@@ -127,7 +157,7 @@ python3 -m pip install --break-system-packages "${PIP_PACKAGES[@]}"
 GIT_DIR="${USER_HOME}/Git"
 sudo -u "$ACTUAL_USER" mkdir -p "$GIT_DIR"
 
-# 6. Clonar e instalar Qtile con soporte Wayland
+# 7. Clonar e instalar Qtile con soporte Wayland
 echo -e "${GREEN}[5/9] Clonando e instalando Qtile (backend Wayland)...${NC}"
 
 if [ -d "${GIT_DIR}/qtile/.git" ]; then
@@ -140,7 +170,7 @@ fi
 cd "${GIT_DIR}/qtile"
 pip install --config-setting backend=wayland . --break-system-packages
 
-# 7. Clonar e instalar qtile-extras
+# 8. Clonar e instalar qtile-extras
 echo -e "${GREEN}[6/9] Clonando e instalando qtile-extras...${NC}"
 
 if [ -d "${GIT_DIR}/qtile-extras/.git" ]; then
@@ -153,7 +183,7 @@ fi
 cd "${GIT_DIR}/qtile-extras"
 pip install . --break-system-packages
 
-# 8. Clonar e instalar mpvpaper
+# 9. Clonar e instalar mpvpaper
 echo -e "${GREEN}[7/9] Clonando e instalando mpvpaper...${NC}"
 
 if [ -d "${GIT_DIR}/mpvpaper/.git" ]; then
@@ -168,11 +198,11 @@ sudo -u "$ACTUAL_USER" meson setup build --prefix=/usr/local --reconfigure || su
 ninja -C build
 ninja -C build install
 
-# 9. Instalación de Matugen con Cargo (usuario normal)
+# 10. Instalación de Matugen con Cargo (usuario normal)
 echo -e "${GREEN}[8/9] Instalando matugen via Cargo...${NC}"
 sudo -u "$ACTUAL_USER" cargo install matugen
 
-# 10. Activación de servicios y configuración del entorno de usuario
+# 11. Activación de servicios y configuración del entorno de usuario
 echo -e "${GREEN}[9/9] Configurando servicios, sesión de Wayland y usuario...${NC}"
 
 # Creación de la sesión de Wayland para Qtile en SDDM
@@ -209,4 +239,3 @@ if [ "$ACTUAL_USER" != "root" ] && [ -x "$(command -v zsh)" ]; then
 fi
 
 echo -e "\n${BLUE}=== ¡Instalación y migración a Debian Sid completadas con éxito! ===${NC}"
-echo -e "${YELLOW}Se recomienda reiniciar el sistema con 'sudo reboot'.${NC}"
