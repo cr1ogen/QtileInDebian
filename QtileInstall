@@ -85,6 +85,7 @@ APT_PACKAGES=(
   cmake
   curl
   eza
+  firefox
   gir1.2-gtk-3.0
   git
   gobject-introspection
@@ -133,6 +134,7 @@ APT_PACKAGES=(
   xdg-utils
   xfce-polkit
   xwayland
+  zplug
   zsh
 )
 
