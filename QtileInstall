@@ -34,7 +34,7 @@ echo -e "   3. Instalación de paquetes Python globales (Waypaper, etc.)."
 echo -e "   4. Compilación e instalación de Qtile (Wayland) y qtile-extras."
 echo -e "   5. Compilación e instalación de mpvpaper."
 echo -e "   6. Instalación de Matugen mediante Cargo."
-echo -e "   7. Descarga e instalación de JetBrainsMono Nerd Font."
+echo -e "   7. Descarga e instalación de JetBrainsMono Nerd Font y Papirus-Folder icons."
 echo -e "   8. Configuración de sesión Wayland, SDDM y cambio de shell a Zsh."
 echo -e "${CYAN}====================================================================${NC}\n"
 
