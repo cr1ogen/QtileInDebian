@@ -219,7 +219,21 @@ else
   echo -e "${YELLOW}[!] La fuente JetBrainsMono Nerd Font ya está instalada.${NC}"
 fi
 
-# 11. Activación de servicios y configuración del entorno de usuario
+
+# 11. Instalación de Temas e Iconos (Papirus Folders)
+echo -e "\n Instalando y configurando Papirus Folders..."
+
+# Crear el directorio de temas en el sistema si no existe
+sudo mkdir -p /usr/share/icons 
+
+# Descargar e instalar el script oficial de papirus-folders
+if ! command -v papirus-folders &> /dev/null; then
+  wget -qO- https://raw.githubusercontent.com/PapirusDevelopmentTeam/papirus-folders/master/install.sh | sudo sh
+fi
+
+echo -e " [✔] Papirus Folders preparado en el sistema."
+
+# 12. Activación de servicios y configuración del entorno de usuario
 echo -e "${GREEN}[10/10] Configurando servicios, sesión de Wayland y usuario...${NC}"
 
 WAYLAND_SESSIONS_DIR="/usr/share/wayland-sessions"
