@@ -1,0 +1,192 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# 1. Comprobar que se ejecute como root
+if [ "$EUID" -ne 0 ]; then
+  echo "[-] Este script debe ejecutarse como root."
+  exit 1
+fi
+
+# Determinar el usuario real (independientemente de cómo se logueó el root)
+REAL_USER="${SUDO_USER:-$(logname 2>/dev/null || echo "${LOGNAME:-}")}"
+if [ -z "$REAL_USER" ] || [ "$REAL_USER" = "root" ]; then
+    REAL_USER=$(ls -1 /home | head -n 1)
+fi
+REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
+
+# Función para ejecutar comandos como el usuario real sin necesidad de sudo
+run_as_user() {
+    runuser -u "$REAL_USER" -- bash -c "$*"
+}
+
+# Colores para la salida
+GREEN='\033[0;32m'; BLUE='\033[0;34m'; YELLOW='\033[0;33m'; RED='\033[0;31m'; CYAN='\033[0;36m'; NC='\033[0m'
+
+clear
+echo -e "${CYAN}====================================================================${NC}"
+echo -e "${BLUE}        INSTALADOR Y MIGRACIÓN DE SISTEMA DEBIAN SID / QTILE        ${NC}"
+echo -e "${CYAN}====================================================================${NC}"
+echo -e " Usuario objetivo: ${GREEN}${REAL_USER}${NC} (${REAL_HOME})"
+echo -e " Destino Qtile   : ${GREEN}/usr/local/bin/qtile${NC}"
+echo -e "${CYAN}====================================================================${NC}\n"
+
+read -p "¿Iniciar la instalación ahora? [S/n]: " CHOICE
+case "$CHOICE" in
+  [nN]|[nN][oO]) exit 0 ;;
+  *) echo -e "\n${GREEN}[+] Iniciando proceso...${NC}\n" ;;
+esac
+
+# 2. Migrar repositorios a Debian Sid
+echo -e "${GREEN}[1/10] Migrando a Sid...${NC}"
+[ -f /etc/apt/sources.list ] && cp /etc/apt/sources.list /etc/apt/sources.list.bak
+cat <<EOF > /etc/apt/sources.list
+deb http://deb.debian.org/debian/ sid main contrib non-free non-free-firmware
+EOF
+[ -d /etc/apt/sources.list.d ] && find /etc/apt/sources.list.d/ -type f -name "*.list" -exec sed -i 's/\b\(bookworm\|trixie\|testing\|stable\)\b/sid/g' {} + || true
+
+echo -e "${GREEN}[2/10] Actualizando repositorios y dist-upgrade...${NC}"
+apt update -y && apt dist-upgrade -y
+
+# 3. Instalación de paquetes de sistema
+echo -e "${GREEN}[3/10] Instalando paquetes de APT...${NC}"
+APT_PACKAGES=(
+  amd64-microcode
+  cargo
+  cmake
+  curl
+  eza
+  firefox
+  gir1.2-gtk-3.0
+  git
+  gobject-introspection
+  gpm
+  grim
+  imagemagick
+  kitty
+  libcairo2-dev
+  libgirepository-2.0-dev
+  libiw-dev
+  libmpv-dev
+  libpangocairo-1.0-0
+  libqt6webenginecore6
+  libwayland-bin
+  libwayland-dev
+  libwlroots-0.20
+  libwlroots-0.20-dev
+  meson
+  ninja-build
+  nwg-look
+  pipewire
+  pkg-config
+  pulseaudio-utils
+  python3-cairocffi
+  python3-cffi
+  python3-jinja2
+  python3-pip
+  python3-pyqt6
+  python3-pyqt6.qtqml
+  python3-pyqt6.qtwebengine
+  python3-setuptools
+  python3-xcffib
+  python3-yaml
+  rofi
+  slurp
+  socat
+  starship
+  unzip
+  wayland-protocols
+  wayland-utils
+  wlogout
+  wlr-randr
+  xdg-desktop-portal-gtk
+  xdg-desktop-portal-wlr
+  xdg-user-dirs
+  xdg-utils
+  xfce-polkit
+  xwayland
+  zplug
+  zsh
+)
+apt install -y "${APT_PACKAGES[@]}"
+apt install -y --no-install-recommends sddm nautilus
+
+# 4. Dependencias de Python
+echo -e "${GREEN}[4/10] Instalando módulos Python en /usr/local...${NC}"
+python3 -m pip install --prefix=/usr/local --break-system-packages dbus-fast iwlib pulsectl-asyncio waypaper
+
+# 5. Configurar directorios de usuario
+GIT_DIR="${REAL_HOME}/Git"
+run_as_user "mkdir -p ${GIT_DIR}"
+
+# 6. Qtile y extras (Instalados explícitamente en /usr/local)
+echo -e "${GREEN}[5/10] Clonando e instalando Qtile en /usr/local...${NC}"
+if [ -d "${GIT_DIR}/qtile/.git" ]; then
+  run_as_user "cd ${GIT_DIR}/qtile && git pull"
+else
+  run_as_user "git clone https://github.com/qtile/qtile.git ${GIT_DIR}/qtile"
+fi
+python3 -m pip install --prefix=/usr/local --config-setting backend=wayland "${GIT_DIR}/qtile" --break-system-packages
+
+echo -e "${GREEN}[6/10] Clonando e instalando qtile-extras...${NC}"
+if [ -d "${GIT_DIR}/qtile-extras/.git" ]; then
+  run_as_user "cd ${GIT_DIR}/qtile-extras && git pull"
+else
+  run_as_user "git clone https://github.com/elParaguayo/qtile-extras.git ${GIT_DIR}/qtile-extras"
+fi
+python3 -m pip install --prefix=/usr/local "${GIT_DIR}/qtile-extras" --break-system-packages
+
+# 7. Mpvpaper
+echo -e "${GREEN}[7/10] Compilando e instalando mpvpaper...${NC}"
+if [ -d "${GIT_DIR}/mpvpaper/.git" ]; then
+  run_as_user "cd ${GIT_DIR}/mpvpaper && git pull"
+else
+  run_as_user "git clone --single-branch https://github.com/GhostNaN/mpvpaper ${GIT_DIR}/mpvpaper"
+fi
+cd "${GIT_DIR}/mpvpaper"
+meson setup build --prefix=/usr/local --reconfigure || meson setup build --prefix=/usr/local
+ninja -C build
+ninja -C build install
+
+# 8. Matugen
+echo -e "${GREEN}[8/10] Instalando Matugen con Cargo para ${REAL_USER}...${NC}"
+run_as_user "cargo install matugen" || true
+
+# 9. Fuentes
+echo -e "${GREEN}[9/10] Instalando JetBrainsMono Nerd Font...${NC}"
+FONT_DIR="${REAL_HOME}/.local/share/fonts"
+run_as_user "mkdir -p ${FONT_DIR}"
+if [ ! -f "${FONT_DIR}/JetBrainsMonoNerdFont-Regular.ttf" ]; then
+  curl -fLo "/tmp/JetBrainsMono.zip" https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip
+  run_as_user "unzip -o /tmp/JetBrainsMono.zip -d ${FONT_DIR}"
+  rm "/tmp/JetBrainsMono.zip"
+  chown -R "${REAL_USER}:${REAL_USER}" "$FONT_DIR"
+  run_as_user "fc-cache -fv"
+fi
+
+# Iconos Papirus
+if ! command -v papirus-folders &> /dev/null; then
+  wget -qO- https://raw.githubusercontent.com/PapirusDevelopmentTeam/papirus-folders/master/install.sh | sh
+fi
+
+# 10. Finalización y Sesión Wayland
+echo -e "${GREEN}[10/10] Configurando entrada de sesión y entorno...${NC}"
+mkdir -p /usr/share/wayland-sessions
+cat <<EOF > /usr/share/wayland-sessions/qtile-wayland.desktop
+[Desktop Entry]
+Name=Qtile (Wayland)
+Comment=Qtile Session on Wayland
+Exec=/usr/local/bin/qtile start -b wayland
+Type=Application
+Keywords=wm;tiling;wayland;
+EOF
+chmod 644 /usr/share/wayland-sessions/qtile-wayland.desktop
+
+run_as_user "xdg-user-dirs-update"
+systemctl enable sddm.service
+systemctl set-default graphical.target
+chsh -s "$(which zsh)" "$REAL_USER"
+
+echo -e "\n${BLUE}=== ¡Instalación completada! ===${NC}"
+echo -e "Qtile quedó instalado correctamente en ${GREEN}/usr/local/bin/qtile${NC}."
+echo -e "${YELLOW}Ejecutá 'reboot' para reiniciar.${NC}"
