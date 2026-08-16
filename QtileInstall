@@ -196,11 +196,6 @@ if [ ! -f "${FONT_DIR}/JetBrainsMonoNerdFont-Regular.ttf" ]; then
   run_as_user "fc-cache -fv"
 fi
 
-# Instalación de Papirus Folders
-if ! command -v papirus-folders &> /dev/null; then
-  wget -qO- https://raw.githubusercontent.com/PapirusDevelopmentTeam/papirus-folders/master/install.sh | sh
-fi
-
 # 11. Activación de servicios y entrada de sesión
 echo -e "${GREEN}[10/10] Configurando servicios y sesión de Wayland...${NC}"
 
