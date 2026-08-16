@@ -91,6 +91,7 @@ APT_PACKAGES=(
   libwlroots-0.20
   libwlroots-0.20-dev
   meson
+  mpv
   ninja-build
   nwg-look
   pipewire
