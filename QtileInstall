@@ -52,7 +52,7 @@ if [ -f /etc/apt/sources.list ]; then
 fi
 
 cat <<EOF > /etc/apt/sources.list
-deb http://de.debian.org/debian/sid main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian sid main contrib non-free non-free-firmware
 EOF
 
 if [ -d /etc/apt/sources.list.d ]; then
