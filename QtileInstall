@@ -52,7 +52,7 @@ if [ -f /etc/apt/sources.list ]; then
 fi
 
 cat <<EOF > /etc/apt/sources.list
-deb http://debian.org sid main contrib non-free non-free-firmware
+deb http://de.debian.org/debian/sid main contrib non-free non-free-firmware
 EOF
 
 if [ -d /etc/apt/sources.list.d ]; then
@@ -230,8 +230,9 @@ mkdir -p /root/.config/zsh/starship
 echo 'export ZDOTDIR=/root/.config/zsh' > /root/.zshenv
 
 # 3. Copiar la configuración de Zsh y plugins a la nueva ruta de root
-if [ -f "${REAL_HOME}/.zshrc" ]; then
-    cp "${REAL_HOME}/.zshrc" /root/.config/zsh/.zshrc
+# CORREGIDO: Ahora busca dentro de .config/zsh/ que es donde realmente lo tienes
+if [ -f "${REAL_HOME}/.config/zsh/.zshrc" ]; then
+    cp "${REAL_HOME}/.config/zsh/.zshrc" /root/.config/zsh/.zshrc
     
     # Corregir automáticamente la línea del 'source' agregándole la barra / inicial
     sed -i 's|source root/.config/zsh/|source /root/.config/zsh/|g' /root/.config/zsh/.zshrc
@@ -248,6 +249,7 @@ fi
 if [ -f "${REAL_HOME}/.config/zsh/starship/starship.toml" ]; then
     cp "${REAL_HOME}/.config/zsh/starship/starship.toml" /root/.config/zsh/starship/
 fi
+
 # ==============================================================================
 
 # Cambiar la shell predeterminada a Zsh para el usuario normal
