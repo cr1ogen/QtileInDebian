@@ -217,7 +217,13 @@ run_as_user "xdg-user-dirs-update" || true
 
 systemctl enable sddm.service
 systemctl set-default graphical.target
+
+# Cambiar a Zsh para el usuario normal
 chsh -s "$(which zsh)" "$REAL_USER" || true
+
+# Cambiar a Zsh para el usuario root
+chsh -s "$(which zsh)" root || true
+
 
 echo -e "\n${BLUE}=== ¡Instalación completada con éxito! ===${NC}"
 echo -e "${YELLOW}Ejecutá 'reboot' para reiniciar el sistema y entrar a SDDM.${NC}"
