@@ -52,7 +52,7 @@ if [ -f /etc/apt/sources.list ]; then
 fi
 
 cat <<EOF > /etc/apt/sources.list
-deb http://deb.debian.org/debian/ sid main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian sid main contrib non-free non-free-firmware
 EOF
 
 if [ -d /etc/apt/sources.list.d ]; then
@@ -145,13 +145,12 @@ GIT_DIR="${REAL_HOME}/Git"
 run_as_user "mkdir -p '${GIT_DIR}'"
 
 
-
-# 6. Clonar e instalar mpvpaper
+# 8. Clonar e instalar mpvpaper
 echo -e "${GREEN}[7/10] Clonando e instalando mpvpaper...${NC}"
 if [ -d "${GIT_DIR}/mpvpaper/.git" ]; then
   run_as_user "git -C '${GIT_DIR}/mpvpaper' pull"
 else
-  run_as_user "git clone --single-branch https://github.com/GhostNaN/mpvpaper '${GIT_DIR}/mpvpaper'"
+  run_as_user "git clone --single-branch https://github.com '${GIT_DIR}/mpvpaper'"
 fi
 
 cd "${GIT_DIR}/mpvpaper"
@@ -159,24 +158,24 @@ meson setup build --prefix=/usr/local --reconfigure || meson setup build --prefi
 ninja -C build
 ninja -C build install
 
-# 7. Instalación de Matugen mediante Cargo
+# 9. Instalación de Matugen mediante Cargo
 echo -e "${GREEN}[8/10] Instalando Matugen via Cargo para ${REAL_USER}...${NC}"
 run_as_user "cargo install matugen" || true
 
-# 8. Instalación de fuentes (JetBrainsMono Nerd Font)
+# 10. Instalación de fuentes (JetBrainsMono Nerd Font)
 echo -e "${GREEN}[9/10] Instalando JetBrainsMono Nerd Font...${NC}"
 FONT_DIR="${REAL_HOME}/.local/share/fonts"
 run_as_user "mkdir -p '${FONT_DIR}'"
 
 if [ ! -f "${FONT_DIR}/JetBrainsMonoNerdFont-Regular.ttf" ]; then
-  curl -fLo "/tmp/JetBrainsMono.zip" https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip
+  curl -fLo "/tmp/JetBrainsMono.zip" https://github.com
   unzip -o "/tmp/JetBrainsMono.zip" -d "$FONT_DIR"
   rm "/tmp/JetBrainsMono.zip"
   chown -R "${REAL_USER}:${REAL_USER}" "$FONT_DIR"
   run_as_user "fc-cache -fv"
 fi
 
-# 9. Activación de servicios y entrada de sesión
+# 11. Activación de servicios y entrada de sesión
 echo -e "${GREEN}[10/10] Configurando servicios y sesión de Wayland...${NC}"
 
 WAYLAND_SESSIONS_DIR="/usr/share/wayland-sessions"
@@ -197,7 +196,47 @@ run_as_user "xdg-user-dirs-update" || true
 
 systemctl enable sddm.service
 systemctl set-default graphical.target
+
+# ==============================================================================
+# CONFIGURACIÓN DE ZSH Y PROMPT PARA EL USUARIO ROOT
+# ==============================================================================
+echo -e "${GREEN}[+] Configurando entornos e intérpretes de comandos para Zsh...${NC}"
+
+# 1. Crear las carpetas necesarias en el entorno de root
+mkdir -p /root/.config/zsh/starship
+
+# 2. Configurar ZDOTDIR en el .zshenv de root
+echo 'export ZDOTDIR=/root/.config/zsh' > /root/.zshenv
+
+# 3. Copiar la configuración de Zsh y plugins a la nueva ruta de root
+# CORREGIDO: Ahora busca dentro de .config/zsh/ que es donde realmente lo tienes
+if [ -f "${REAL_HOME}/.config/zsh/.zshrc" ]; then
+    cp "${REAL_HOME}/.config/zsh/.zshrc" /root/.config/zsh/.zshrc
+    
+    # Corregir automáticamente la línea del 'source' agregándole la barra / inicial
+    sed -i 's|source root/.config/zsh/|source /root/.config/zsh/|g' /root/.config/zsh/.zshrc
+    
+    # Encapsular el historial de root en su propia carpeta ZDOTDIR
+    sed -i 's|HISTFILE=~/.zsh_history|HISTFILE=$ZDOTDIR/.zsh_history|g' /root/.config/zsh/.zshrc
+fi
+
+# 4. Copiar el plugin de auto-sugerencias y el tema Starship a root
+if [ -d "${REAL_HOME}/.config/zsh/zsh-autosuggestions" ]; then
+    cp -r "${REAL_HOME}/.config/zsh/zsh-autosuggestions" /root/.config/zsh/
+fi
+
+if [ -f "${REAL_HOME}/.config/zsh/starship/starship.toml" ]; then
+    cp "${REAL_HOME}/.config/zsh/starship/starship.toml" /root/.config/zsh/starship/
+fi
+
+# ==============================================================================
+
+# Cambiar la shell predeterminada a Zsh para el usuario normal
 chsh -s "$(which zsh)" "$REAL_USER" || true
+
+# Cambiar la shell predeterminada a Zsh para el usuario root
+chsh -s "$(which zsh)" root || true
+
 
 echo -e "\n${BLUE}=== ¡Instalación completada con éxito! ===${NC}"
 echo -e "${YELLOW}Ejecutá 'reboot' para reiniciar el sistema y entrar a SDDM.${NC}"
