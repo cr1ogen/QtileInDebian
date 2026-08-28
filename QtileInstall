@@ -84,6 +84,7 @@ APT_PACKAGES=(
   libgirepository-2.0-dev
   libiw-dev
   libmpv-dev
+  libnotify-bin
   libpangocairo-1.0-0
   libqt6webenginecore6
   libwayland-bin
